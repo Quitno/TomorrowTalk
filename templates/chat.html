@@ -3,24 +3,28 @@
 <main class="app-shell" data-user-id="{{ me.id }}">
   <aside class="sidebar">
     <div class="sidebar-top">
-      <div class="profile-pill">
-        <img id="avatarPreview" class="avatar avatar--xl" src="{{ me.avatar_path or url_for('static', filename='logo.png') }}" alt="Profile">
-        <div>
+      <div class="profile-strip">
+        <button type="button" class="avatar-button" id="profilePicBtn" aria-label="Open profile picture">
+          <img id="avatarPreview" class="avatar avatar--xl" src="{{ me.avatar_path or url_for('static', filename='logo.png') }}" alt="Profile picture">
+        </button>
+        <div class="profile-copy">
           <div class="name">{{ me.display_name }}</div>
           <div class="meta">{{ me.email }}</div>
+          <div class="tiny-meta">Visible to: <span id="visibilityLabel">{{ me.avatar_visibility|default('contacts') }}</span></div>
         </div>
       </div>
+
       <div class="sidebar-actions">
-        <button class="chip chip--dark" id="newChatBtn">New chat</button>
-        <button class="chip chip--dark" id="profileBtn">Profile</button>
+        <button class="btn btn--soft" id="selfChatBtn" type="button">Chat with myself</button>
+        <button class="btn btn--primary" id="newChatBtn" type="button">Add user</button>
       </div>
-      <div class="theme-row">
-        <button class="theme-switch active" data-theme="navy">Blue dark</button>
-        <button class="theme-switch" data-theme="pure">Pure black</button>
-        <button class="theme-switch" data-theme="light">Light</button>
-      </div>
-      <input id="contactSearch" class="search" type="search" placeholder="Search people">
+
+      <label class="search-wrap">
+        <span class="sr-only">Search people</span>
+        <input id="contactSearch" class="search" type="search" placeholder="Search people">
+      </label>
     </div>
+
     <div id="conversationList" class="conversation-list"></div>
   </aside>
 
@@ -28,72 +32,108 @@
     <div class="chat-topbar">
       <div class="chat-peer">
         <img id="peerAvatar" class="avatar" src="{{ url_for('static', filename='logo.png') }}" alt="">
-        <div>
+        <div class="chat-peer-copy">
           <div id="peerName" class="name">Select a conversation</div>
           <div id="peerMeta" class="meta">Messages are encrypted at rest</div>
         </div>
       </div>
-      <div class="chat-actions">
-        <button id="bgBtn" class="chip">Chat background</button>
-        <button id="voiceBtn" class="chip">Voice</button>
-        <button id="videoBtn" class="chip">Video</button>
-        <button id="deleteChatBtn" class="chip chip--danger">Delete chat</button>
-        <button id="deleteAllBtn" class="chip chip--danger">Delete all</button>
+
+      <div class="chat-toolbar">
+        <div class="toolbar-popover-wrap">
+          <button id="chatMenuBtn" class="icon-btn icon-btn--more" type="button" aria-label="Chat actions">⋯</button>
+          <div id="chatMenu" class="toolbar-popover hidden">
+            <button type="button" id="bgBtn">Chat background</button>
+            <button type="button" id="voiceBtn">Voice</button>
+            <button type="button" id="videoBtn">Video</button>
+            <button type="button" id="blockBtn">Block user</button>
+            <button type="button" id="unblockBtn">Unblock user</button>
+            <button type="button" id="deleteChatBtn" class="danger-item">Delete chat</button>
+          </div>
+        </div>
+        <button id="settingsBtn" class="icon-btn" type="button" aria-label="Settings">⚙</button>
       </div>
     </div>
 
     <div id="messages" class="messages">
       <div class="empty-state">
         <h2>Choose a chat</h2>
-        <p>Your conversations will appear here like a polished messenger.</p>
+        <p>Your conversations will appear here in a cleaner, phone-friendly layout.</p>
       </div>
     </div>
 
     <form id="composer" class="composer">
-      <button type="button" id="attachBtn" class="icon-btn">＋</button>
+      <button type="button" id="attachBtn" class="icon-btn" aria-label="Attach">＋</button>
       <textarea id="messageInput" rows="1" placeholder="Type a message..."></textarea>
       <button type="submit" class="btn btn--primary">Send</button>
     </form>
-
-    <div id="callPanel" class="call-panel hidden">
-      <div class="call-panel__header">
-        <strong id="callTitle">Call</strong>
-        <button id="closeCallBtn" class="chip">Close</button>
-      </div>
-      <div class="call-panel__body">
-        <video id="localVideo" autoplay playsinline muted></video>
-        <div class="call-modes">
-          <button id="modeVoice" class="chip">Voice mode</button>
-          <button id="modeVideo" class="chip">Video mode</button>
-        </div>
-        <p class="muted">This UI is ready for WebRTC signaling. The preview stream starts locally and can be linked to a realtime backend.</p>
-      </div>
-    </div>
   </section>
 </main>
 
-<div id="profileModal" class="modal hidden">
-  <div class="modal-card">
-    <h3>Edit profile</h3>
-    <form id="profileForm">
-      <label>Display name</label>
-      <input name="display_name" type="text" value="{{ me.display_name }}">
-      <label>Avatar</label>
-      <input name="avatar" type="file" accept="image/*">
-      <button class="btn btn--primary" type="submit">Save profile</button>
-      <button type="button" class="btn" id="closeProfileBtn">Cancel</button>
-    </form>
+<div id="settingsModal" class="modal hidden">
+  <div class="modal-card modal-card--wide">
+    <div class="modal-head">
+      <h3>Settings</h3>
+      <button type="button" class="icon-btn" id="closeSettingsBtn">✕</button>
+    </div>
+
+    <div class="settings-grid">
+      <form id="profileForm" class="stack">
+        <h4>Profile</h4>
+        <label>Display name</label>
+        <input name="display_name" type="text" value="{{ me.display_name }}">
+
+        <label>Avatar</label>
+        <input name="avatar" type="file" accept="image/*">
+
+        <label>Who can see my picture</label>
+        <select name="avatar_visibility" id="avatarVisibilitySelect">
+          <option value="everyone" {% if me.avatar_visibility|default('contacts') == 'everyone' %}selected{% endif %}>Everyone</option>
+          <option value="contacts" {% if me.avatar_visibility|default('contacts') == 'contacts' %}selected{% endif %}>Contacts only</option>
+          <option value="hidden" {% if me.avatar_visibility|default('contacts') == 'hidden' %}selected{% endif %}>Hidden</option>
+        </select>
+
+        <label>App font</label>
+        <select name="font_mode" id="fontModeSelect">
+          <option value="system" {% if me.font_mode|default('system') == 'system' %}selected{% endif %}>System</option>
+          <option value="rounded" {% if me.font_mode|default('system') == 'rounded' %}selected{% endif %}>Rounded</option>
+          <option value="mono" {% if me.font_mode|default('system') == 'mono' %}selected{% endif %}>Mono</option>
+        </select>
+
+        <button class="btn btn--primary" type="submit">Save profile</button>
+      </form>
+
+      <div class="stack settings-info">
+        <h4>About us</h4>
+        <p>Tomorrow Technology company creates software, communication tools, and digital systems that feel fast, clean, and useful on mobile.</p>
+
+        <h4>Account</h4>
+        <button type="button" class="btn" id="logoutBtn">Logout</button>
+        <button type="button" class="btn btn--soft" id="deleteAccountBtn">Delete my account</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="profilePreviewModal" class="modal hidden">
+  <div class="modal-card modal-card--preview">
+    <div class="modal-head">
+      <h3>Profile picture</h3>
+      <button type="button" class="icon-btn" id="closePreviewBtn">✕</button>
+    </div>
+    <img id="previewImage" class="preview-image" src="{{ me.avatar_path or url_for('static', filename='logo.png') }}" alt="Profile preview">
   </div>
 </div>
 
 <div id="newChatModal" class="modal hidden">
   <div class="modal-card">
-    <h3>Start a new chat</h3>
-    <form id="newChatForm">
+    <div class="modal-head">
+      <h3>Start a new chat</h3>
+      <button type="button" class="icon-btn" id="closeNewChatBtn">✕</button>
+    </div>
+    <form id="newChatForm" class="stack">
       <label>Email</label>
       <input name="email" type="email" placeholder="person@example.com" required>
       <button class="btn btn--primary" type="submit">Open chat</button>
-      <button type="button" class="btn" id="closeNewChatBtn">Cancel</button>
     </form>
   </div>
 </div>
