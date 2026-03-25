@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="en" data-theme="pure">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+  <title>{{ title }}</title>
+</head>
+<body>
+  <main class="error-shell">
+    <div class="error-card">
+      <div class="brand-title">David's Connect</div>
+      <h1>{{ title }}</h1>
+      <p>{{ message }}</p>
+      <a class="btn" href="{{ url_for('auth') }}">Go home</a>
+    </div>
+  </main>
+</body>
+</html>

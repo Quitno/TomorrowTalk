@@ -1,0 +1,17 @@
+{
+  "name": "David's Connect",
+  "short_name": "David's Connect",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#07111f",
+  "theme_color": "#e50914",
+  "description": "Mobile-first encrypted chat app",
+  "icons": [
+    {
+      "src": "/logo.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}

@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+{% block body %}
+<main class="auth-shell">
+  <section class="auth-hero">
+    <div class="hero-card">
+      <h1>Modern communication with a native-app feel.</h1>
+      <p>Join by email or invite link. One email only, clean threads, theme control, secure storage, and a refined mobile-first layout.</p>
+      <div class="hero-points">
+        <span>Unique email check</span>
+        <span>Invite links</span>
+        <span>Offline cache</span>
+        <span>PWA install</span>
+      </div>
+    </div>
+  </section>
+
+  <section class="auth-panel">
+    <div class="auth-tabs">
+      <button class="tab active" data-auth-tab="login">Log in</button>
+      <button class="tab" data-auth-tab="register">Register</button>
+    </div>
+
+    <form class="auth-form" id="loginForm" action="{{ url_for('login') }}" method="post">
+      <label>Email</label>
+      <input name="email" type="email" required placeholder="name@example.com">
+      <label>Password</label>
+      <input name="password" type="password" required placeholder="Your password">
+      <button class="btn btn--primary" type="submit">Log in</button>
+    </form>
+
+    <form class="auth-form hidden" id="registerForm" action="{{ url_for('register') }}" method="post">
+      <label>Display name</label>
+      <input name="display_name" type="text" placeholder="Your name">
+      <label>Email</label>
+      <input name="email" type="email" required placeholder="name@example.com">
+      <label>Password</label>
+      <input name="password" type="password" required minlength="8" placeholder="Create a strong password">
+      <label>Invite code <span class="muted">(optional)</span></label>
+      <input name="invite_code" type="text" value="{{ invite or '' }}" placeholder="Paste invite code or use email only">
+      <button class="btn btn--primary" type="submit">Create account</button>
+    </form>
+
+    <div class="auth-note">
+      <strong>Unique email rule:</strong> the app checks the normalized email and rejects duplicates that look the same.
+    </div>
+  </section>
+</main>
+{% endblock %}
+{% block scripts %}
+<script>
+  window.__PREFILL_INVITE__ = {{ invite|tojson }};
+</script>
+{% endblock %}

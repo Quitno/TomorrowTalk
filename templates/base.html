@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en" data-theme="{{ theme|default('navy') }}">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#e50914">
+  <title>{{ title or "David's Connect" }}</title>
+  <link rel="manifest" href="{{ url_for('manifest') }}">
+  <link rel="icon" href="{{ url_for('logo_alias') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+  <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => navigator.serviceWorker.register('{{ url_for("service_worker") }}').catch(() => {}));
+    }
+  </script>
+</head>
+<body>
+  <header class="app-strip">
+    <div class="app-strip__inner">
+      <div class="brand-mark">D</div>
+      <div>
+        <div class="brand-title">David's Connect</div>
+        <div class="brand-subtitle">Private, fast, mobile-first communication</div>
+      </div>
+      <div class="header-actions">
+        {% if me %}
+        <a class="chip" href="{{ url_for('logout') }}">Logout</a>
+        {% endif %}
+        {% if admin %}
+        <a class="chip chip--admin" href="{{ url_for('admin_logout') }}">Admin logout</a>
+        {% endif %}
+      </div>
+    </div>
+  </header>
+
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+      <div class="flash-wrap">
+        {% for category, message in messages %}
+          <div class="flash flash--{{ category }}">{{ message }}</div>
+        {% endfor %}
+      </div>
+    {% endif %}
+  {% endwith %}
+
+  {% block body %}{% endblock %}
+
+  <button id="installBtn" class="install-btn hidden">Install app</button>
+  <script>
+    window.__ME__ = {{ me_json | default(None) | tojson }};
+  </script>
+  <script src="{{ url_for('static', filename='app.js') }}" defer></script>
+  {% block scripts %}{% endblock %}
+</body>
+</html>

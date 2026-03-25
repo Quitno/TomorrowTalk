@@ -1,0 +1,100 @@
+{% extends "base.html" %}
+{% block body %}
+<main class="app-shell" data-user-id="{{ me.id }}">
+  <aside class="sidebar">
+    <div class="sidebar-top">
+      <div class="profile-pill">
+        <img id="avatarPreview" class="avatar avatar--xl" src="{{ me.avatar_path or url_for('static', filename='logo.png') }}" alt="Profile">
+        <div>
+          <div class="name">{{ me.display_name }}</div>
+          <div class="meta">{{ me.email }}</div>
+        </div>
+      </div>
+      <div class="sidebar-actions">
+        <button class="chip chip--dark" id="newChatBtn">New chat</button>
+        <button class="chip chip--dark" id="profileBtn">Profile</button>
+      </div>
+      <div class="theme-row">
+        <button class="theme-switch active" data-theme="navy">Blue dark</button>
+        <button class="theme-switch" data-theme="pure">Pure black</button>
+        <button class="theme-switch" data-theme="light">Light</button>
+      </div>
+      <input id="contactSearch" class="search" type="search" placeholder="Search people">
+    </div>
+    <div id="conversationList" class="conversation-list"></div>
+  </aside>
+
+  <section class="chat-pane">
+    <div class="chat-topbar">
+      <div class="chat-peer">
+        <img id="peerAvatar" class="avatar" src="{{ url_for('static', filename='logo.png') }}" alt="">
+        <div>
+          <div id="peerName" class="name">Select a conversation</div>
+          <div id="peerMeta" class="meta">Messages are encrypted at rest</div>
+        </div>
+      </div>
+      <div class="chat-actions">
+        <button id="bgBtn" class="chip">Chat background</button>
+        <button id="voiceBtn" class="chip">Voice</button>
+        <button id="videoBtn" class="chip">Video</button>
+        <button id="deleteChatBtn" class="chip chip--danger">Delete chat</button>
+        <button id="deleteAllBtn" class="chip chip--danger">Delete all</button>
+      </div>
+    </div>
+
+    <div id="messages" class="messages">
+      <div class="empty-state">
+        <h2>Choose a chat</h2>
+        <p>Your conversations will appear here like a polished messenger.</p>
+      </div>
+    </div>
+
+    <form id="composer" class="composer">
+      <button type="button" id="attachBtn" class="icon-btn">＋</button>
+      <textarea id="messageInput" rows="1" placeholder="Type a message..."></textarea>
+      <button type="submit" class="btn btn--primary">Send</button>
+    </form>
+
+    <div id="callPanel" class="call-panel hidden">
+      <div class="call-panel__header">
+        <strong id="callTitle">Call</strong>
+        <button id="closeCallBtn" class="chip">Close</button>
+      </div>
+      <div class="call-panel__body">
+        <video id="localVideo" autoplay playsinline muted></video>
+        <div class="call-modes">
+          <button id="modeVoice" class="chip">Voice mode</button>
+          <button id="modeVideo" class="chip">Video mode</button>
+        </div>
+        <p class="muted">This UI is ready for WebRTC signaling. The preview stream starts locally and can be linked to a realtime backend.</p>
+      </div>
+    </div>
+  </section>
+</main>
+
+<div id="profileModal" class="modal hidden">
+  <div class="modal-card">
+    <h3>Edit profile</h3>
+    <form id="profileForm">
+      <label>Display name</label>
+      <input name="display_name" type="text" value="{{ me.display_name }}">
+      <label>Avatar</label>
+      <input name="avatar" type="file" accept="image/*">
+      <button class="btn btn--primary" type="submit">Save profile</button>
+      <button type="button" class="btn" id="closeProfileBtn">Cancel</button>
+    </form>
+  </div>
+</div>
+
+<div id="newChatModal" class="modal hidden">
+  <div class="modal-card">
+    <h3>Start a new chat</h3>
+    <form id="newChatForm">
+      <label>Email</label>
+      <input name="email" type="email" placeholder="person@example.com" required>
+      <button class="btn btn--primary" type="submit">Open chat</button>
+      <button type="button" class="btn" id="closeNewChatBtn">Cancel</button>
+    </form>
+  </div>
+</div>
+{% endblock %}
