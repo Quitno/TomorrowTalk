@@ -1,3 +1,4 @@
+
 import os
 import secrets
 import sqlite3
@@ -22,8 +23,14 @@ UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 DB_PATH = INSTANCE_DIR / "david_connect.db"
 MASTER_KEY_PATH = INSTANCE_DIR / "master.key"
 
-BOOTSTRAP_ADMIN_SECRET = os.environ.get("DAVID_CONNECT_BOOTSTRAP_SECRET", "Change-This-Bootstrap-Secret-Once")
-SESSION_SECRET = os.environ.get("DAVID_CONNECT_SESSION_SECRET", "change-this-session-secret-now")
+BOOTSTRAP_ADMIN_SECRET = os.environ.get(
+    "DAVID_CONNECT_BOOTSTRAP_SECRET",
+    "Change-This-Bootstrap-Secret-Once"
+)
+SESSION_SECRET = os.environ.get(
+    "DAVID_CONNECT_SESSION_SECRET",
+    "change-this-session-secret-now"
+)
 
 app = Flask(__name__)
 app.secret_key = SESSION_SECRET
@@ -53,6 +60,7 @@ def normalize_email(email: str) -> str:
 def db():
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
+    conn.execute("PRAGMA foreign_keys = ON")
     return conn
 
 def get_master_key():
@@ -107,8 +115,8 @@ def init_db():
             used_at TEXT,
             expires_at TEXT,
             created_at TEXT NOT NULL,
-            FOREIGN KEY(created_by) REFERENCES users(id),
-            FOREIGN KEY(used_by) REFERENCES users(id)
+            FOREIGN KEY(created_by) REFERENCES users(id) ON DELETE SET NULL,
+            FOREIGN KEY(used_by) REFERENCES users(id) ON DELETE SET NULL
         );
 
         CREATE TABLE IF NOT EXISTS conversations (
@@ -130,8 +138,8 @@ def init_db():
             created_at TEXT NOT NULL,
             edited_at TEXT,
             deleted_at TEXT,
-            FOREIGN KEY(conversation_id) REFERENCES conversations(id),
-            FOREIGN KEY(sender_id) REFERENCES users(id)
+            FOREIGN KEY(conversation_id) REFERENCES conversations(id) ON DELETE CASCADE,
+            FOREIGN KEY(sender_id) REFERENCES users(id) ON DELETE CASCADE
         );
 
         CREATE TABLE IF NOT EXISTS audit_logs (
@@ -143,7 +151,7 @@ def init_db():
             ip TEXT,
             user_agent TEXT,
             created_at TEXT NOT NULL,
-            FOREIGN KEY(user_id) REFERENCES users(id)
+            FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE SET NULL
         );
 
         CREATE TABLE IF NOT EXISTS blocks (
@@ -151,7 +159,9 @@ def init_db():
             blocker_id INTEGER NOT NULL,
             blocked_id INTEGER NOT NULL,
             created_at TEXT NOT NULL,
-            UNIQUE(blocker_id, blocked_id)
+            UNIQUE(blocker_id, blocked_id),
+            FOREIGN KEY(blocker_id) REFERENCES users(id) ON DELETE CASCADE,
+            FOREIGN KEY(blocked_id) REFERENCES users(id) ON DELETE CASCADE
         );
         """)
         row = conn.execute("SELECT value FROM settings WHERE key='bootstrap_locked'").fetchone()
@@ -193,22 +203,33 @@ def current_user():
     if not uid:
         return None
     with db() as conn:
-        return conn.execute("SELECT * FROM users WHERE id=?", (uid,)).fetchone()
+        row = conn.execute("SELECT * FROM users WHERE id=? AND is_active=1", (uid,)).fetchone()
+    return row
 
 def current_admin():
     uid = session.get("admin_id")
     if not uid:
         return None
     with db() as conn:
-        return conn.execute("SELECT * FROM users WHERE id=? AND is_admin=1", (uid,)).fetchone()
+        row = conn.execute("SELECT * FROM users WHERE id=? AND is_admin=1 AND is_active=1", (uid,)).fetchone()
+    return row
 
 def row_to_dict(row):
     return dict(row) if row is not None else None
+
+def wants_json():
+    return (
+        request.path.startswith("/api/")
+        or request.headers.get("X-Requested-With") == "fetch"
+        or "application/json" in request.headers.get("Accept", "")
+    )
 
 def login_required(view):
     @wraps(view)
     def wrapper(*args, **kwargs):
         if not current_user():
+            if wants_json():
+                return jsonify({"error": "Authentication required."}), 401
             return redirect(url_for("auth"))
         return view(*args, **kwargs)
     return wrapper
@@ -217,6 +238,8 @@ def admin_required(view):
     @wraps(view)
     def wrapper(*args, **kwargs):
         if not current_admin():
+            if wants_json():
+                return jsonify({"error": "Admin access required."}), 403
             return redirect(url_for("admin_page"))
         return view(*args, **kwargs)
     return wrapper
@@ -240,7 +263,7 @@ def log_event(action, severity="info", detail="", user_id=None):
         conn.commit()
 
 def conversation_pair(a, b):
-    return (a, b) if a < b else (b, a)
+    return (a, b) if a <= b else (b, a)
 
 def get_or_create_conversation(user_a, user_b):
     low, high = conversation_pair(user_a, user_b)
@@ -262,6 +285,9 @@ def get_or_create_conversation(user_a, user_b):
         ).fetchone()
 
 def conv_partner_row(conv, me_id):
+    if conv["user_low"] == conv["user_high"] == me_id:
+        with db() as conn:
+            return conn.execute("SELECT * FROM users WHERE id=?", (me_id,)).fetchone()
     partner_id = conv["user_high"] if conv["user_low"] == me_id else conv["user_low"]
     with db() as conn:
         return conn.execute("SELECT * FROM users WHERE id=?", (partner_id,)).fetchone()
@@ -270,7 +296,7 @@ def user_conversations(user_id):
     with db() as conn:
         rows = conn.execute(
             """
-            SELECT c.*, 
+            SELECT c.*,
                    CASE WHEN c.user_low=? THEN c.user_high ELSE c.user_low END AS partner_id,
                    u.display_name AS partner_name,
                    u.email AS partner_email,
@@ -340,6 +366,26 @@ def ensure_contact_can_access(conv_id, user_id):
     if not row or (row["user_low"] != user_id and row["user_high"] != user_id):
         abort(404)
     return row
+
+def purge_user_everywhere(user_id: int):
+    with db() as conn:
+        conv_rows = conn.execute(
+            "SELECT id FROM conversations WHERE user_low=? OR user_high=?",
+            (user_id, user_id),
+        ).fetchall()
+        conv_ids = [row["id"] for row in conv_rows]
+
+        if conv_ids:
+            placeholders = ",".join("?" for _ in conv_ids)
+            conn.execute(f"DELETE FROM messages WHERE conversation_id IN ({placeholders})", conv_ids)
+            conn.execute(f"DELETE FROM conversations WHERE id IN ({placeholders})", conv_ids)
+
+        conn.execute("DELETE FROM blocks WHERE blocker_id=? OR blocked_id=?", (user_id, user_id))
+        conn.execute("UPDATE audit_logs SET user_id=NULL WHERE user_id=?", (user_id,))
+        conn.execute("UPDATE invites SET created_by=NULL WHERE created_by=?", (user_id,))
+        conn.execute("UPDATE invites SET used_by=NULL WHERE used_by=?", (user_id,))
+        conn.execute("DELETE FROM users WHERE id=?", (user_id,))
+        conn.commit()
 
 @app.after_request
 def headers(resp):
@@ -488,23 +534,30 @@ def api_users():
             users = conn.execute(
                 """SELECT id, email, display_name, avatar_path, is_admin
                    FROM users
-                   WHERE id != ? AND is_active=1 AND (LOWER(email) LIKE ? OR LOWER(display_name) LIKE ?)
+                   WHERE id != ? AND is_active=1
+                     AND (LOWER(email) LIKE ? OR LOWER(display_name) LIKE ?)
                    ORDER BY display_name ASC""",
                 (me["id"], f"%{q}%", f"%{q}%"),
             ).fetchall()
         else:
             users = conn.execute(
                 """SELECT id, email, display_name, avatar_path, is_admin
-                   FROM users WHERE id != ? AND is_active=1 ORDER BY display_name ASC""",
+                   FROM users WHERE id != ? AND is_active=1
+                   ORDER BY display_name ASC""",
                 (me["id"],),
             ).fetchall()
     payload = []
     for u in users:
         with db() as conn:
-            blocked = conn.execute(
-                "SELECT 1 FROM blocks WHERE (blocker_id=? AND blocked_id=?) OR (blocker_id=? AND blocked_id=?)",
-                (me["id"], u["id"], u["id"], me["id"]),
+            blocked_by_me = conn.execute(
+                "SELECT 1 FROM blocks WHERE blocker_id=? AND blocked_id=?",
+                (me["id"], u["id"]),
             ).fetchone()
+            blocked_me = conn.execute(
+                "SELECT 1 FROM blocks WHERE blocker_id=? AND blocked_id=?",
+                (u["id"], me["id"]),
+            ).fetchone()
+        blocked = bool(blocked_by_me or blocked_me)
         conversation_id = None
         if not blocked:
             conv = get_or_create_conversation(me["id"], u["id"])
@@ -516,11 +569,18 @@ def api_users():
             "avatar_path": u["avatar_path"],
             "is_admin": bool(u["is_admin"]),
             "conversation_id": conversation_id,
-            "blocked_by_me": bool(blocked) and blocked and False,
-            "blocked_me": bool(blocked) and blocked and False,
-            "blocked": bool(blocked),
+            "blocked_by_me": bool(blocked_by_me),
+            "blocked_me": bool(blocked_me),
+            "blocked": blocked,
         })
     return jsonify(payload)
+
+@app.route("/api/self-chat", methods=["POST"])
+@login_required
+def api_self_chat():
+    me = current_user()
+    conv = get_or_create_conversation(me["id"], me["id"])
+    return jsonify({"conversation_id": conv["id"]})
 
 @app.route("/api/conversations")
 @login_required
@@ -571,20 +631,40 @@ def api_create_conversation():
     me = current_user()
     partner_email = normalize_email(request.form.get("email"))
     partner_id = request.form.get("user_id")
+
+    row = None
     with db() as conn:
-        if partner_id:
-            row = conn.execute("SELECT id FROM users WHERE id=? AND (id != ? OR id = ?)", (partner_id, me["id"], me["id"])).fetchone()
-        else:
-            row = conn.execute("SELECT id FROM users WHERE email_normalized=? AND id != ?", (partner_email, me["id"])).fetchone()
+        if partner_id is not None and str(partner_id).strip() != "":
+            try:
+                pid = int(partner_id)
+            except Exception:
+                return jsonify({"error": "Invalid user."}), 400
+            row = conn.execute(
+                "SELECT id FROM users WHERE id=? AND is_active=1",
+                (pid,),
+            ).fetchone()
+        elif partner_email:
+            row = conn.execute(
+                "SELECT id FROM users WHERE email_normalized=? AND is_active=1",
+                (partner_email,),
+            ).fetchone()
+
     if not row:
         return jsonify({"error": "User not found."}), 404
+
     with db() as conn:
-        blocked = conn.execute(
-            "SELECT 1 FROM blocks WHERE (blocker_id=? AND blocked_id=?) OR (blocker_id=? AND blocked_id=?)",
-            (me["id"], row["id"], row["id"], me["id"]),
+        blocked_by_me = conn.execute(
+            "SELECT 1 FROM blocks WHERE blocker_id=? AND blocked_id=?",
+            (me["id"], row["id"]),
         ).fetchone()
-    if blocked:
+        blocked_me = conn.execute(
+            "SELECT 1 FROM blocks WHERE blocker_id=? AND blocked_id=?",
+            (row["id"], me["id"]),
+        ).fetchone()
+
+    if blocked_by_me or blocked_me:
         return jsonify({"error": "This chat is blocked."}), 403
+
     conv = get_or_create_conversation(me["id"], row["id"])
     return jsonify({"conversation_id": conv["id"]})
 
@@ -707,10 +787,19 @@ def api_profile():
         avatar.save(target)
         avatar_path = f"/static/uploads/{filename}"
     with db() as conn:
-        conn.execute("UPDATE users SET display_name=?, avatar_path=?, avatar_visibility=?, font_mode=?, last_seen=? WHERE id=?", (display_name, avatar_path, avatar_visibility, font_mode, iso_now(), me["id"]))
+        conn.execute(
+            "UPDATE users SET display_name=?, avatar_path=?, avatar_visibility=?, font_mode=?, last_seen=? WHERE id=?",
+            (display_name, avatar_path, avatar_visibility, font_mode, iso_now(), me["id"]),
+        )
         conn.commit()
     log_event("profile_updated", "info", "Updated profile", user_id=me["id"])
-    return jsonify({"ok": True, "avatar_path": avatar_path, "display_name": display_name, "avatar_visibility": avatar_visibility, "font_mode": font_mode})
+    return jsonify({
+        "ok": True,
+        "avatar_path": avatar_path,
+        "display_name": display_name,
+        "avatar_visibility": avatar_visibility,
+        "font_mode": font_mode
+    })
 
 @app.route("/api/account", methods=["POST", "DELETE"])
 @login_required
@@ -781,22 +870,114 @@ def api_create_invite():
 @app.route("/api/admin/users")
 @admin_required
 def api_admin_users():
+    q = (request.args.get("q") or "").strip().lower()
+    params = []
+    where = ""
+    if q:
+        where = "WHERE LOWER(u.email) LIKE ? OR LOWER(u.display_name) LIKE ?"
+        params = [f"%{q}%", f"%{q}%"]
+
     with db() as conn:
-        users = conn.execute("SELECT id, email, display_name, avatar_path, is_admin, is_active, created_at, last_seen FROM users ORDER BY created_at DESC").fetchall()
+        users = conn.execute(
+            f"""
+            SELECT
+                u.id,
+                u.email,
+                u.display_name,
+                u.avatar_path,
+                u.is_admin,
+                u.is_active,
+                u.created_at,
+                u.last_seen,
+                (
+                    SELECT COUNT(*)
+                    FROM conversations c
+                    WHERE c.user_low = u.id OR c.user_high = u.id
+                ) AS conversation_count,
+                (
+                    SELECT COUNT(*)
+                    FROM messages m
+                    WHERE m.sender_id = u.id
+                ) AS sent_count,
+                (
+                    SELECT COUNT(*)
+                    FROM blocks b
+                    WHERE b.blocker_id = u.id OR b.blocked_id = u.id
+                ) AS block_count
+            FROM users u
+            {where}
+            ORDER BY u.created_at DESC
+            """,
+            params,
+        ).fetchall()
+
     return jsonify([dict(u) for u in users])
 
-@app.route("/api/admin/promote/<int:user_id>", methods=["POST"])
+@app.route("/api/admin/create-admin", methods=["POST"])
 @admin_required
-def api_admin_promote(user_id):
-    with db() as conn:
-        conn.execute("UPDATE users SET is_admin=1 WHERE id=?", (user_id,))
-        conn.commit()
-    log_event("admin_promoted", "warning", f"Promoted user {user_id} to admin")
-    return jsonify({"ok": True})
+def api_admin_create_admin():
+    email = normalize_email(request.form.get("email"))
+    display_name = (request.form.get("display_name") or "Administrator").strip() or "Administrator"
+    password = request.form.get("password", "")
 
-@app.route("/api/admin/toggle/<int:user_id>", methods=["POST"])
+    if not email or "@" not in email:
+        return jsonify({"error": "Enter a valid email."}), 400
+    if len(password) < 10:
+        return jsonify({"error": "Password must be at least 10 characters."}), 400
+
+    with db() as conn:
+        exists = conn.execute("SELECT 1 FROM users WHERE email_normalized=?", (email,)).fetchone()
+        if exists:
+            return jsonify({"error": "That email already exists."}), 409
+
+        conn.execute(
+            """INSERT INTO users(email, email_normalized, display_name, password_hash, avatar_path, is_admin, is_active, created_at)
+               VALUES(?, ?, ?, ?, NULL, 1, 1, ?)""",
+            (
+                request.form.get("email").strip(),
+                email,
+                display_name,
+                generate_password_hash(password, method="scrypt"),
+                iso_now(),
+            ),
+        )
+        uid = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
+        conn.commit()
+
+    log_event("admin_created", "warning", f"Created admin {email}", user_id=uid)
+    return jsonify({"ok": True, "email": email, "message": "Admin created."})
+
+@app.route("/api/admin/users/<int:user_id>/admin", methods=["POST", "DELETE"])
+@admin_required
+def api_admin_set_admin(user_id):
+    admin = current_admin()
+    if user_id == admin["id"]:
+        return jsonify({"error": "You cannot change your own admin status here."}), 400
+
+    with db() as conn:
+        user = conn.execute("SELECT id, email, is_admin FROM users WHERE id=?", (user_id,)).fetchone()
+        if not user:
+            return jsonify({"error": "User not found"}), 404
+
+        new_val = 1 if request.method == "POST" else 0
+        conn.execute("UPDATE users SET is_admin=? WHERE id=?", (new_val, user_id))
+        conn.commit()
+
+    log_event(
+        "admin_role_changed",
+        "warning",
+        f"Set user {user_id} admin={new_val}",
+        user_id=admin["id"],
+    )
+    return jsonify({"ok": True, "is_admin": bool(new_val)})
+
+@app.route("/api/admin/users/<int:user_id>/toggle", methods=["POST"])
 @admin_required
 def api_admin_toggle(user_id):
+    admin = current_admin()
+    if user_id == admin["id"]:
+        return jsonify({"error": "You cannot disable your own admin account from here."}), 400
+
     with db() as conn:
         row = conn.execute("SELECT is_active FROM users WHERE id=?", (user_id,)).fetchone()
         if not row:
@@ -804,8 +985,31 @@ def api_admin_toggle(user_id):
         new_val = 0 if row["is_active"] else 1
         conn.execute("UPDATE users SET is_active=? WHERE id=?", (new_val, user_id))
         conn.commit()
-    log_event("admin_toggle", "warning", f"Set user {user_id} active={new_val}")
+
+    log_event("admin_toggle", "warning", f"Set user {user_id} active={new_val}", user_id=admin["id"])
     return jsonify({"ok": True, "active": bool(new_val)})
+
+@app.route("/api/admin/users/<int:user_id>", methods=["DELETE"])
+@admin_required
+def api_admin_delete_user(user_id):
+    admin = current_admin()
+    if user_id == admin["id"]:
+        return jsonify({"error": "You cannot delete the account you are using right now."}), 400
+
+    with db() as conn:
+        user = conn.execute("SELECT id, email, display_name, is_admin FROM users WHERE id=?", (user_id,)).fetchone()
+        if not user:
+            return jsonify({"error": "User not found"}), 404
+
+    purge_user_everywhere(user_id)
+
+    log_event(
+        "admin_user_deleted",
+        "warning",
+        f"Deleted user {user['email']} ({user['display_name']})",
+        user_id=admin["id"],
+    )
+    return jsonify({"ok": True})
 
 @app.route("/api/admin/logs")
 @admin_required
@@ -826,8 +1030,21 @@ def api_admin_logs():
 def admin_page():
     admin = current_admin()
     if admin:
-        return render_template("admin.html", title="Admin · David's Connect", admin=admin, bootstrap_secret="hidden", bootstrap_locked=is_bootstrap_locked())
-    return render_template("admin.html", title="Admin · David's Connect", admin=None, has_admin=False, bootstrap_secret=BOOTSTRAP_ADMIN_SECRET, bootstrap_locked=is_bootstrap_locked())
+        return render_template(
+            "admin.html",
+            title="Admin · David's Connect",
+            admin=admin,
+            bootstrap_locked=is_bootstrap_locked(),
+            bootstrap_secret="hidden",
+        )
+    return render_template(
+        "admin.html",
+        title="Admin · David's Connect",
+        admin=None,
+        has_admin=False,
+        bootstrap_secret=BOOTSTRAP_ADMIN_SECRET,
+        bootstrap_locked=is_bootstrap_locked(),
+    )
 
 @app.route("/admin/bootstrap", methods=["POST"])
 def admin_bootstrap():
@@ -851,7 +1068,13 @@ def admin_bootstrap():
         conn.execute(
             """INSERT INTO users(email, email_normalized, display_name, password_hash, avatar_path, is_admin, is_active, created_at)
                VALUES(?, ?, ?, ?, NULL, 1, 1, ?)""",
-            (request.form.get("email").strip(), email, display_name, generate_password_hash(password, method="scrypt"), iso_now()),
+            (
+                request.form.get("email").strip(),
+                email,
+                display_name,
+                generate_password_hash(password, method="scrypt"),
+                iso_now(),
+            ),
         )
         uid = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
         conn.commit()
@@ -867,7 +1090,7 @@ def admin_login():
     email = normalize_email(request.form.get("email"))
     password = request.form.get("password", "")
     with db() as conn:
-        user = conn.execute("SELECT * FROM users WHERE email_normalized=? AND is_admin=1", (email,)).fetchone()
+        user = conn.execute("SELECT * FROM users WHERE email_normalized=? AND is_admin=1 AND is_active=1", (email,)).fetchone()
     if not user or not check_password_hash(user["password_hash"], password):
         log_event("admin_login_failed", "warning", f"Failed admin login for {email}")
         flash("Invalid admin credentials.", "error")

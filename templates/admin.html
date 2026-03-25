@@ -2,23 +2,54 @@
 {% block body %}
 <main class="admin-shell">
   {% if admin %}
-    <section class="admin-grid">
-      <div class="admin-card">
-        <h2>Dashboard</h2>
-        <p class="muted">Signed in as <strong>{{ admin.display_name }}</strong> · {{ admin.email }}</p>
-        <div class="admin-actions">
-          <button class="btn btn--primary" id="refreshAdminBtn">Refresh</button>
-          <button class="btn" id="createInviteBtn">Create invite</button>
-        </div>
+    <section class="admin-topbar">
+      <div>
+        <h2>Admin dashboard</h2>
+        <p class="muted">
+          Signed in as <strong>{{ admin.display_name }}</strong> · {{ admin.email }}
+        </p>
       </div>
 
+      <div class="admin-actions">
+        <button class="btn btn--primary" id="refreshAdminBtn" type="button">Refresh</button>
+        <button class="btn" id="createAdminBtn" type="button">Create admin</button>
+        <button class="btn" id="createInviteBtn" type="button">Create invite</button>
+        <a class="btn" href="{{ url_for('admin_logout') }}">Logout</a>
+      </div>
+    </section>
+
+    <section class="admin-stats">
       <div class="admin-card">
-        <h3>Users</h3>
+        <h3>Total users</h3>
+        <strong id="statTotalUsers">0</strong>
+      </div>
+      <div class="admin-card">
+        <h3>Admins</h3>
+        <strong id="statAdmins">0</strong>
+      </div>
+      <div class="admin-card">
+        <h3>Active</h3>
+        <strong id="statActive">0</strong>
+      </div>
+      <div class="admin-card">
+        <h3>Disabled</h3>
+        <strong id="statDisabled">0</strong>
+      </div>
+    </section>
+
+    <section class="admin-grid">
+      <div class="admin-card">
+        <div class="admin-card-head">
+          <h3>Users</h3>
+          <input id="userSearch" class="admin-search" type="search" placeholder="Search users by name or email">
+        </div>
         <div id="adminUsers" class="admin-list"></div>
       </div>
 
       <div class="admin-card">
-        <h3>Audit logs</h3>
+        <div class="admin-card-head">
+          <h3>Audit logs</h3>
+        </div>
         <div id="adminLogs" class="admin-list admin-list--logs"></div>
       </div>
     </section>
@@ -26,15 +57,41 @@
     <div id="inviteModal" class="modal hidden">
       <div class="modal-card">
         <h3>Create invite</h3>
-        <form id="inviteForm">
+        <form id="inviteForm" class="stack">
           <label>Invite email (optional)</label>
           <input name="invite_email" type="email" placeholder="optional@example.com">
+
           <label>Expires in days</label>
           <input name="expires_days" type="number" min="1" value="14">
-          <button class="btn btn--primary" type="submit">Generate invite</button>
-          <button type="button" class="btn" id="closeInviteBtn">Cancel</button>
+
+          <div class="row-actions">
+            <button class="btn btn--primary" type="submit">Generate invite</button>
+            <button type="button" class="btn" id="closeInviteBtn">Cancel</button>
+          </div>
         </form>
         <div id="inviteResult" class="invite-result"></div>
+      </div>
+    </div>
+
+    <div id="createAdminModal" class="modal hidden">
+      <div class="modal-card">
+        <h3>Create admin</h3>
+        <form id="createAdminForm" class="stack">
+          <label>Email</label>
+          <input name="email" type="email" required placeholder="newadmin@example.com">
+
+          <label>Display name</label>
+          <input name="display_name" type="text" value="Administrator" required>
+
+          <label>Password</label>
+          <input name="password" type="password" minlength="10" required placeholder="Strong password">
+
+          <div class="row-actions">
+            <button class="btn btn--primary" type="submit">Create admin</button>
+            <button type="button" class="btn" id="closeCreateAdminBtn">Cancel</button>
+          </div>
+        </form>
+        <div id="createAdminResult" class="invite-result"></div>
       </div>
     </div>
   {% else %}
@@ -42,6 +99,11 @@
       <div class="admin-card">
         <h2>Admin access</h2>
         <p class="muted">Bootstrapping is locked after the first admin is created.</p>
+        {% if bootstrap_locked %}
+          <p class="muted">Bootstrap is already locked.</p>
+        {% else %}
+          <p class="muted">Create the first admin, then this screen switches to login only.</p>
+        {% endif %}
       </div>
 
       {% if not bootstrap_locked %}
@@ -50,12 +112,16 @@
         <form action="{{ url_for('admin_bootstrap') }}" method="post" class="stack">
           <label>Bootstrap secret</label>
           <input name="bootstrap_secret" type="password" required placeholder="Bootstrap secret">
+
           <label>Admin email</label>
           <input name="email" type="email" required placeholder="admin@example.com">
+
           <label>Display name</label>
-          <input name="display_name" type="text" value="Administrator">
+          <input name="display_name" type="text" value="Administrator" required>
+
           <label>Password</label>
           <input name="password" type="password" required minlength="10" placeholder="Strong admin password">
+
           <button class="btn btn--primary" type="submit">Create admin</button>
         </form>
       </div>
@@ -65,9 +131,11 @@
         <h3>Admin login</h3>
         <form action="{{ url_for('admin_login') }}" method="post" class="stack">
           <label>Email</label>
-          <input name="email" type="email" required>
+          <input name="email" type="email" required placeholder="admin@example.com">
+
           <label>Password</label>
-          <input name="password" type="password" required>
+          <input name="password" type="password" required placeholder="Password">
+
           <button class="btn btn--primary" type="submit">Log in</button>
         </form>
       </div>
@@ -75,9 +143,9 @@
   {% endif %}
 </main>
 {% endblock %}
+
 {% block scripts %}
 {% if admin %}
-<script>window.__ADMIN__ = true;</script>
 <script src="{{ url_for('static', filename='admin.js') }}" defer></script>
 {% endif %}
 {% endblock %}
