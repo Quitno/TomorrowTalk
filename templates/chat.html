@@ -1,36 +1,76 @@
 {% extends "base.html" %}
 {% block content %}
-<header class="chatbar">
-  <a href="{{ url_for('app_home') }}" class="back" aria-label="Back">←</a>
+<header class="chat-top">
+  <a href="{{ url_for('app_home') }}" class="back-btn" aria-label="Back">←</a>
 
   <button class="chat-avatar-btn" type="button" data-preview="{{ other.profile_pic if other and other.profile_pic else url_for('static', filename='avatar-default.svg') }}" aria-label="View profile picture">
-    <img class="avatar large" src="{{ other.profile_pic if other and other.profile_pic else url_for('static', filename='avatar-default.svg') }}" alt="">
+    <img class="avatar avatar-lg" src="{{ other.profile_pic if other and other.profile_pic else url_for('static', filename='avatar-default.svg') }}" alt="">
   </button>
 
   <div class="chat-head">
     <div class="chat-name">{{ contact.alias if contact.alias else other.display_name }}</div>
-    <div class="chat-meta">{{ other.email }}</div>
+    <div class="chat-meta">Tap avatar to view</div>
   </div>
 
-  <div class="dots-menu">
-    <button type="button" class="dots-btn" aria-label="Open chat menu">⋯</button>
-    <div class="dots-panel right">
-      <form method="post" action="{{ url_for('delete_chat', contact_id=other.id) }}"><button type="submit">Delete chat</button></form>
-      <form method="post" action="{{ url_for('toggle_block', contact_id=other.id) }}"><button type="submit">{{ 'Unblock user' if contact.blocked else 'Block user' }}</button></form>
-      <form class="rename-form" method="post" action="{{ url_for('rename_user', contact_id=other.id) }}">
-        <input type="hidden" name="alias" value="{{ contact.alias if contact.alias else other.display_name }}">
-        <button type="submit">Rename user</button>
-      </form>
-    </div>
+  <button class="menu-btn" type="button" aria-label="Chat menu">☰</button>
+  <div class="chat-menu dots-panel">
+    <form method="post" action="{{ url_for('delete_chat', contact_id=other.id) }}"><button type="submit">Delete chat</button></form>
+    <form method="post" action="{{ url_for('toggle_block', contact_id=other.id) }}"><button type="submit">{{ 'Unblock user' if contact.blocked else 'Block user' }}</button></form>
+    <form class="rename-form" method="post" action="{{ url_for('rename_user', contact_id=other.id) }}">
+      <input type="hidden" name="alias" value="{{ contact.alias if contact.alias else other.display_name }}">
+      <button type="submit">Rename user</button>
+    </form>
   </div>
 </header>
+
+<section class="call-strip">
+  <button type="button" class="call-pill" data-call="audio">Audio call</button>
+  <button type="button" class="call-pill" data-call="video">Video call</button>
+  <button type="button" class="call-pill" data-call="share">Share</button>
+</section>
 
 <main class="chat-window">
   <div class="message-stream">
     {% if messages %}
       {% for msg in messages %}
         <div class="bubble {{ 'mine' if msg.sender_id == current_user.id else 'theirs' }}">
-          <div class="bubble-text">{{ msg.body }}</div>
+          {% if msg.body and msg.body.strip() %}
+            <div class="bubble-text">{{ msg.body }}</div>
+          {% endif %}
+
+          {% if msg.attachments %}
+            <div class="attachment-stack">
+              {% for att in msg.attachments %}
+                {% if att.kind == 'picture' %}
+                  <a class="attachment-card" href="{{ url_for('static', filename=att.stored_path.split('static/')[-1]) }}" target="_blank" rel="noopener">
+                    <span>Picture</span>
+                    <strong>{{ att.original_name }}</strong>
+                  </a>
+                {% elif att.kind == 'video' %}
+                  <a class="attachment-card" href="{{ url_for('static', filename=att.stored_path.split('static/')[-1]) }}" target="_blank" rel="noopener">
+                    <span>Video</span>
+                    <strong>{{ att.original_name }}</strong>
+                  </a>
+                {% elif att.kind == 'audio' %}
+                  <a class="attachment-card" href="{{ url_for('static', filename=att.stored_path.split('static/')[-1]) }}" target="_blank" rel="noopener">
+                    <span>Audio</span>
+                    <strong>{{ att.original_name }}</strong>
+                  </a>
+                {% elif att.kind == 'document' or att.kind == 'file' %}
+                  <a class="attachment-card" href="{{ url_for('static', filename=att.stored_path.split('static/')[-1]) }}" target="_blank" rel="noopener">
+                    <span>File</span>
+                    <strong>{{ att.original_name }}</strong>
+                  </a>
+                {% elif att.kind == 'location' %}
+                  <div class="attachment-card location-card">
+                    <span>Location</span>
+                    <strong>{{ att.label }}</strong>
+                  </div>
+                {% endif %}
+              {% endfor %}
+            </div>
+          {% endif %}
+
           <div class="bubble-time">{{ msg.created_at[11:16] }}</div>
         </div>
       {% endfor %}
@@ -43,10 +83,45 @@
   </div>
 </main>
 
-<form class="composer" method="post" action="{{ url_for('send_message', contact_id=other.id) }}">
-  <input type="text" name="message" placeholder="Message {{ other.display_name }}" autocomplete="off" required>
+<form class="composer" method="post" action="{{ url_for('send_message', contact_id=other.id) }}" enctype="multipart/form-data">
+  <button type="button" class="attach-btn" aria-label="Attach">＋</button>
+  <input type="text" name="message" placeholder="Message {{ other.display_name }}" autocomplete="off">
+  <input type="file" name="attachments" id="attachmentInput" multiple hidden>
+  <button type="button" class="location-btn" id="shareLocation">📍</button>
   <button type="submit">Send</button>
+  <input type="hidden" name="location_label" id="locationLabel">
+  <input type="hidden" name="location_meta" id="locationMeta">
 </form>
+
+<div class="attachment-sheet" id="attachmentSheet" hidden>
+  <div class="sheet-card">
+    <div class="sheet-title">Share something</div>
+    <div class="sheet-grid">
+      <button type="button" data-attach="attachments">Files</button>
+      <button type="button" data-attach="attachments">Pictures</button>
+      <button type="button" data-attach="attachments">Audio</button>
+      <button type="button" data-attach="attachments">Video</button>
+      <button type="button" data-call="audio">Audio call</button>
+      <button type="button" data-call="video">Video call</button>
+    </div>
+    <button type="button" class="sheet-close" id="closeAttachmentSheet">Close</button>
+  </div>
+</div>
+
+<div class="call-overlay" id="callOverlay" hidden>
+  <div class="call-card">
+    <div class="call-avatar">
+      <img class="avatar avatar-xl" src="{{ other.profile_pic if other and other.profile_pic else url_for('static', filename='avatar-default.svg') }}" alt="">
+    </div>
+    <div class="call-title" id="callTitle">Calling…</div>
+    <div class="call-subtitle">{{ contact.alias if contact.alias else other.display_name }}</div>
+    <div class="call-actions">
+      <button type="button" id="muteCall">Mute</button>
+      <button type="button" id="minimizeCall">Minimize</button>
+      <button type="button" id="cancelCall" class="danger">Cancel</button>
+    </div>
+  </div>
+</div>
 
 <div class="modal" id="imageModal" aria-hidden="true">
   <div class="modal-card">

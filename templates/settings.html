@@ -1,12 +1,12 @@
 {% extends "base.html" %}
 {% block content %}
 <header class="settings-top">
-  <a class="back" href="{{ url_for('app_home') }}" aria-label="Back">←</a>
+  <a class="back-btn" href="{{ url_for('app_home') }}" aria-label="Back">←</a>
   <div class="settings-title">
     <h2>Settings</h2>
-    <p>Personalize the app and manage your invite link.</p>
+    <p>Personalize the app and manage invites.</p>
   </div>
-  <a class="gear" href="{{ url_for('logout') }}" aria-label="Logout">⎋</a>
+  <a class="menu-btn" href="{{ url_for('logout') }}" aria-label="Logout">☰</a>
 </header>
 
 <section class="settings-panel">
@@ -34,7 +34,7 @@
     <h3>Invite people</h3>
     <form method="post" class="stack">
       <input type="hidden" name="action" value="invite">
-      <button class="secondary" type="submit">Create invite link</button>
+      <button class="invite-cta" type="submit">Create invite link</button>
     </form>
     {% if invite_url %}
     <div class="invite-result" id="inviteResult" data-url="{{ invite_url }}">

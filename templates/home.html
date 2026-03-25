@@ -1,53 +1,57 @@
 {% extends "base.html" %}
 {% block content %}
-<header class="topbar">
-  <a href="{{ url_for('settings') }}" class="avatar-link" aria-label="Open settings">
-    <img class="avatar" src="{{ current_user.profile_pic if current_user and current_user.profile_pic else url_for('static', filename='avatar-default.svg') }}" alt="profile">
-  </a>
+<header class="topbar hero-header">
+  <button type="button" class="avatar-shell" aria-label="Profile picture">
+    <img class="avatar avatar-lg" src="{{ current_user.profile_pic if current_user and current_user.profile_pic else url_for('static', filename='avatar-default.svg') }}" alt="profile">
+  </button>
 
   <div class="title-wrap">
     <div class="app-title">{{ APP_NAME }}</div>
-    <div class="app-subtitle">My contacts</div>
+    <div class="app-subtitle">Private chat space</div>
   </div>
 
-  <a class="gear" href="{{ url_for('settings') }}" aria-label="Settings">⚙</a>
+  <a class="menu-btn" href="{{ url_for('settings') }}" aria-label="Settings">☰</a>
 </header>
 
-<section class="hero-mini">
-  <div class="mini-copy">
-    <div class="mini-label">Recent chats first</div>
-    <div class="mini-text">Pin, archive, rename, or remove people from the three dots.</div>
+<section class="search-shell">
+  <div class="search-card">
+    <div class="search-label">Search</div>
+    <form method="get" action="{{ url_for('app_home') }}" class="search-form" id="contactSearchForm">
+      <input id="contactSearch" type="search" name="q" value="{{ q }}" placeholder="Search contacts or recent chats" autocomplete="off">
+      <button type="submit">Go</button>
+    </form>
   </div>
-  <div class="mini-chip">{{ unread_count }} new</div>
-</section>
-
-<section class="search-row">
-  <form method="get" action="{{ url_for('app_home') }}" class="search-form">
-    <input type="search" name="q" value="{{ q }}" placeholder="Search contacts">
-    <button type="submit">Search</button>
-  </form>
 </section>
 
 <section class="section-heading">
   <h2>My contacts</h2>
-  <p>People you added or invited by link.</p>
+  <p>Simple, clean, and phone-first.</p>
 </section>
 
-<section class="contact-list">
+<section class="contact-list" id="contactList">
   {% if contacts %}
     {% for contact in contacts %}
-      <article class="contact-item {{ 'pinned' if contact.pinned else '' }} {{ 'archived' if contact.archived else '' }}">
+      <article class="contact-item {{ 'pinned' if contact.pinned else '' }} {{ 'archived' if contact.archived else '' }}" data-name="{{ (contact.alias if contact.alias else contact.contact_name)|lower }}">
         <a class="contact-main" href="{{ url_for('chat', contact_id=contact.contact_id) }}">
-          <div class="avatar-stack">
+          <div class="contact-avatar-wrap">
             <img class="avatar" src="{{ contact.contact_pic if contact.contact_pic else url_for('static', filename='avatar-default.svg') }}" alt="">
-            {% if contact.pinned %}<span class="tiny-badge">Pin</span>{% endif %}
+            {% if contact.pinned %}<span class="tiny-badge">Pinned</span>{% endif %}
           </div>
+
           <div class="contact-copy">
             <div class="contact-name">
               {{ contact.alias if contact.alias else contact.contact_name }}
             </div>
-            <div class="contact-meta">{{ contact.contact_email }}</div>
+            <div class="contact-preview">
+              {% if contact.last_message is defined and contact.last_message %}
+                {{ contact.last_message[:52] }}{% if contact.last_message|length > 52 %}…{% endif %}
+              {% else %}
+                &nbsp;
+              {% endif %}
+            </div>
           </div>
+
+          <div class="contact-spacer"></div>
         </a>
 
         <div class="dots-menu">
@@ -63,12 +67,18 @@
   {% else %}
     <div class="empty-state">
       <h3>No contacts yet</h3>
-      <p>Create an invite link in settings, then add someone in.</p>
+      <p>Create an invite from below to add family and friends.</p>
     </div>
   {% endif %}
 </section>
 
-<div class="fab-row">
-  <a class="fab" href="{{ url_for('settings') }}">Invite</a>
-</div>
+<section class="invite-card">
+  <div class="invite-copy">
+    <div class="invite-title">Invite people</div>
+    <div class="invite-subtitle">Share a private link with someone you trust.</div>
+  </div>
+  <a class="invite-btn" href="{{ url_for('settings') }}">Invite</a>
+</section>
+
+<div class="page-gap"></div>
 {% endblock %}
