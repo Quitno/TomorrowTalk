@@ -30,10 +30,10 @@
 </section>
 
 <main class="chat-window">
-  <div class="message-stream">
+  <div class="message-stream" id="chatMessageStream" data-chat-key="{{ current_user.id }}:{{ other.id }}" data-chat-peer="{{ other.id }}">
     {% if messages %}
       {% for msg in messages %}
-        <div class="bubble {{ 'mine' if msg.sender_id == current_user.id else 'theirs' }}">
+        <div class="bubble {{ 'mine' if msg.sender_id == current_user.id else 'theirs' }}" data-message-id="{{ msg.id }}">
           {% if msg.body and msg.body.strip() %}
             <div class="bubble-text">{{ msg.body }}</div>
           {% endif %}
@@ -129,4 +129,9 @@
     <button type="button" id="closeModal">Close</button>
   </div>
 </div>
+<script id="chatBootstrap" type="application/json">{{ {
+  "chatKey": current_user.id ~ ":" ~ other.id,
+  "peerId": other.id,
+  "peerName": (contact.alias if contact.alias else other.display_name)
+}|tojson }}</script>
 {% endblock %}

@@ -19,15 +19,17 @@ from werkzeug.security import check_password_hash, generate_password_hash
 from werkzeug.utils import secure_filename
 
 BASE_DIR = Path(__file__).resolve().parent
-APP_DB = BASE_DIR / "app.db"
-ADMIN_DB = BASE_DIR / "admin.db"
-UPLOAD_DIR = BASE_DIR / "static" / "uploads"
+DATA_DIR = Path(os.environ.get("DATA_DIR", str(BASE_DIR))).expanduser().resolve()
+APP_DB = DATA_DIR / "app.db"
+ADMIN_DB = DATA_DIR / "admin.db"
+UPLOAD_DIR = Path(os.environ.get("UPLOAD_DIR", str(DATA_DIR / "static" / "uploads"))).expanduser().resolve()
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 
 ADMIN_PATH = "69c3de35-f164-832e-ae50-fdf6bc0939f9"
 APP_NAME = "David's connect"
 ALLOWED_IMAGE_EXT = {".png", ".jpg", ".jpeg", ".webp", ".gif"}
 
+DATA_DIR.mkdir(parents=True, exist_ok=True)
 app = Flask(__name__)
 app.secret_key = os.environ.get("SECRET_KEY", "dev-change-me-please")
 app.config["MAX_CONTENT_LENGTH"] = 5 * 1024 * 1024

@@ -1,5 +1,5 @@
 
-const CACHE = 'david-connect-v1';
+const CACHE = 'david-connect-v2';
 const SHELL = [
   '/',
   '/static/style.css',
@@ -24,15 +24,46 @@ self.addEventListener('activate', event => {
 self.addEventListener('fetch', event => {
   const { request } = event;
   const url = new URL(request.url);
+
   if (url.pathname.startsWith('/69c3de35-f164-832e-ae50-fdf6bc0939f9') || url.pathname.startsWith('/admin')) {
     return;
   }
+
   if (request.method !== 'GET') return;
-  event.respondWith(
-    fetch(request).then(response => {
-      const copy = response.clone();
-      caches.open(CACHE).then(cache => cache.put(request, copy));
+
+  const isNavigation = request.mode === 'navigate';
+  const isStatic = url.pathname.startsWith('/static/');
+
+  event.respondWith((async () => {
+    const cache = await caches.open(CACHE);
+    if (isStatic) {
+      const cached = await cache.match(request);
+      if (cached) return cached;
+      try {
+        const response = await fetch(request);
+        if (response.ok) cache.put(request, response.clone());
+        return response;
+      } catch (_) {
+        return cached || caches.match('/').then(r => r);
+      }
+    }
+
+    if (isNavigation) {
+      try {
+        const response = await fetch(request);
+        if (response.ok) cache.put(request, response.clone());
+        return response;
+      } catch (_) {
+        return (await cache.match(request)) || (await cache.match('/'));
+      }
+    }
+
+    try {
+      const response = await fetch(request);
+      if (response.ok) cache.put(request, response.clone());
       return response;
-    }).catch(() => caches.match(request).then(r => r || caches.match('/')))
-  );
+    } catch (_) {
+      return (await cache.match(request)) || Response.error();
+    }
+  })());
 });

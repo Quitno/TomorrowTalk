@@ -21,3 +21,9 @@ Notes:
 
 Admin path:
 `69c3de35-f164-832e-ae50-fdf6bc0939f9`
+
+
+Persistence:
+- Chats, users, and uploads can be stored outside the build directory by setting `DATA_DIR` and `UPLOAD_DIR`.
+- For Render, point those env vars at a mounted persistent disk path so redeploys do not wipe data.
+- The PWA also requests persistent browser storage and caches visited chat screens on the device.

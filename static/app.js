@@ -178,3 +178,132 @@ if (muteCall) muteCall.addEventListener('click', () => muteCall.textContent = mu
 if (minimizeCall) minimizeCall.addEventListener('click', closeCall);
 if (callOverlay) callOverlay.addEventListener('click', (e) => { if (e.target === callOverlay) closeCall(); });
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeCall(); });
+
+/* ----- PWA install + persistent storage ----- */
+let deferredInstallPrompt = null;
+const installBtn = document.getElementById('pwaInstallBtn');
+
+async function requestPersistentStorage() {
+  try {
+    if (navigator.storage && navigator.storage.persist) {
+      await navigator.storage.persist();
+    }
+  } catch (_) {}
+}
+
+function isStandaloneMode() {
+  return window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
+}
+
+function refreshInstallButton() {
+  if (!installBtn) return;
+  const hiddenByInstall = localStorage.getItem('pwaInstalled') === '1' || isStandaloneMode();
+  installBtn.hidden = hiddenByInstall || !deferredInstallPrompt;
+}
+
+if (installBtn) {
+  installBtn.addEventListener('click', async () => {
+    if (!deferredInstallPrompt) return;
+    deferredInstallPrompt.prompt();
+    try {
+      const choice = await deferredInstallPrompt.userChoice;
+      if (choice && choice.outcome === 'accepted') {
+        localStorage.setItem('pwaInstalled', '1');
+      }
+    } finally {
+      deferredInstallPrompt = null;
+      refreshInstallButton();
+    }
+  });
+}
+
+window.addEventListener('beforeinstallprompt', (e) => {
+  e.preventDefault();
+  deferredInstallPrompt = e;
+  refreshInstallButton();
+});
+
+window.addEventListener('appinstalled', () => {
+  localStorage.setItem('pwaInstalled', '1');
+  deferredInstallPrompt = null;
+  refreshInstallButton();
+});
+
+window.addEventListener('load', () => {
+  requestPersistentStorage();
+  refreshInstallButton();
+});
+
+/* ----- local chat archive so chats survive builds on the device ----- */
+const TT_DB_NAME = 'tomorrowtalk-pwa';
+const TT_DB_VERSION = 1;
+const TT_STORE = 'chatSnapshots';
+
+function openTTDB() {
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.open(TT_DB_NAME, TT_DB_VERSION);
+    request.onupgradeneeded = () => {
+      const db = request.result;
+      if (!db.objectStoreNames.contains(TT_STORE)) {
+        db.createObjectStore(TT_STORE, { keyPath: 'chatKey' });
+      }
+    };
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error);
+  });
+}
+
+async function saveChatSnapshot(chatKey, html) {
+  if (!chatKey || !html) return;
+  try {
+    const db = await openTTDB();
+    await new Promise((resolve, reject) => {
+      const tx = db.transaction(TT_STORE, 'readwrite');
+      tx.objectStore(TT_STORE).put({
+        chatKey,
+        html,
+        savedAt: new Date().toISOString()
+      });
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+    });
+    db.close();
+  } catch (_) {}
+}
+
+async function loadChatSnapshot(chatKey) {
+  try {
+    const db = await openTTDB();
+    const result = await new Promise((resolve, reject) => {
+      const tx = db.transaction(TT_STORE, 'readonly');
+      const req = tx.objectStore(TT_STORE).get(chatKey);
+      req.onsuccess = () => resolve(req.result || null);
+      req.onerror = () => reject(req.error);
+    });
+    db.close();
+    return result;
+  } catch (_) {
+    return null;
+  }
+}
+
+async function hydrateChatFromCache() {
+  const stream = document.getElementById('chatMessageStream');
+  if (!stream) return;
+  const chatKey = stream.dataset.chatKey;
+  if (!chatKey) return;
+
+  const currentHtml = stream.innerHTML.trim();
+  const hasRealMessages = currentHtml && !currentHtml.includes('empty-chat');
+  if (hasRealMessages) {
+    await saveChatSnapshot(chatKey, stream.innerHTML);
+    return;
+  }
+
+  const cached = await loadChatSnapshot(chatKey);
+  if (cached && cached.html) {
+    stream.innerHTML = cached.html;
+  }
+}
+
+window.addEventListener('load', hydrateChatFromCache);

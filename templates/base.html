@@ -16,6 +16,7 @@
   {% block head %}{% endblock %}
 </head>
 <body class="{{ current_user.theme if current_user else 'blue' }}" style="--font-scale: {{ current_user.font_scale if current_user else 100 }}%;">
+  <button type="button" id="pwaInstallBtn" class="pwa-install-btn" hidden>Install app</button>
   <div class="shell">
     {% with messages = get_flashed_messages() %}
       {% if messages %}
