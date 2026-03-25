@@ -1,6 +1,17 @@
 (function () {
   const installBtn = document.getElementById('installBtn');
+  const PLACEHOLDER_AVATAR =
+    "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 96 96'%3E%3Ccircle cx='48' cy='48' r='46' fill='%23e5e7eb'/%3E%3Ccircle cx='48' cy='37' r='15' fill='%23cbd5e1'/%3E%3Cpath d='M18 79c7-14 20-21 30-21s23 7 30 21' fill='%23cbd5e1'/%3E%3C/svg%3E";
+
   let deferredPrompt = null;
+
+  function setMobileView(view) {
+    document.body.classList.toggle('show-chat', view === 'chat');
+  }
+
+  function avatarUrl(src) {
+    return src && String(src).trim() ? src : PLACEHOLDER_AVATAR;
+  }
 
   if (installBtn) {
     window.addEventListener('beforeinstallprompt', (e) => {
@@ -8,6 +19,7 @@
       deferredPrompt = e;
       installBtn.classList.remove('hidden');
     });
+
     installBtn.addEventListener('click', async () => {
       if (!deferredPrompt) return;
       deferredPrompt.prompt();
@@ -15,6 +27,7 @@
       deferredPrompt = null;
       installBtn.classList.add('hidden');
     });
+
     window.addEventListener('appinstalled', () => installBtn.classList.add('hidden'));
     if (window.matchMedia('(display-mode: standalone)').matches) installBtn.classList.add('hidden');
   }
@@ -23,20 +36,22 @@
   if (authTabs.length) {
     const loginForm = document.getElementById('loginForm');
     const registerForm = document.getElementById('registerForm');
+
     authTabs.forEach(btn => btn.addEventListener('click', () => {
       authTabs.forEach(x => x.classList.remove('active'));
       btn.classList.add('active');
       const tab = btn.dataset.authTab;
-      loginForm.classList.toggle('hidden', tab !== 'login');
-      registerForm.classList.toggle('hidden', tab !== 'register');
+      if (loginForm) loginForm.classList.toggle('hidden', tab !== 'login');
+      if (registerForm) registerForm.classList.toggle('hidden', tab !== 'register');
     }));
+
     const invite = window.__PREFILL_INVITE__;
     if (invite && registerForm) {
       const el = registerForm.querySelector('[name="invite_code"]');
       if (el && !el.value) el.value = invite;
       authTabs.forEach(x => x.classList.remove('active'));
       document.querySelector('[data-auth-tab="register"]')?.classList.add('active');
-      loginForm.classList.add('hidden');
+      if (loginForm) loginForm.classList.add('hidden');
       registerForm.classList.remove('hidden');
     }
   }
@@ -46,6 +61,7 @@
 
   const me = window.__ME__ || {};
   const userId = Number(shell.dataset.userId);
+
   const conversationList = document.getElementById('conversationList');
   const messagesEl = document.getElementById('messages');
   const peerName = document.getElementById('peerName');
@@ -66,6 +82,9 @@
   const selfChatBtn = document.getElementById('selfChatBtn');
   const fontModeSelect = document.getElementById('fontModeSelect');
   const avatarVisibilitySelect = document.getElementById('avatarVisibilitySelect');
+  const headerSettingsBtn = document.getElementById('headerSettingsBtn');
+  const settingsBtn = document.getElementById('settingsBtn');
+  const backToContactsBtn = document.getElementById('backToContactsBtn');
 
   const state = {
     conversations: [],
@@ -78,11 +97,17 @@
     searchResults: false,
   };
 
-  const fmt = (ts) => {
+  function fmt(ts) {
     if (!ts) return '';
     const d = new Date(ts);
-    return d.toLocaleString([], { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
-  };
+    return d.toLocaleString([], {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+  }
 
   async function jfetch(url, opts = {}) {
     const res = await fetch(url, opts);
@@ -102,20 +127,32 @@
     if (fontModeSelect) fontModeSelect.value = mode;
   }
 
-  function openModal(el) { el?.classList.remove('hidden'); }
-  function closeModal(el) { el?.classList.add('hidden'); }
+  function openModal(el) {
+    el?.classList.remove('hidden');
+  }
+
+  function closeModal(el) {
+    el?.classList.add('hidden');
+  }
+
+  function renderAvatar(el, src) {
+    if (!el) return;
+    el.src = avatarUrl(src);
+  }
 
   setTheme(localStorage.getItem('dc-theme') || 'navy');
   setFont(localStorage.getItem('dc-font') || me.font_mode || 'system');
 
-  document.querySelectorAll('.theme-switch').forEach(btn => btn.addEventListener('click', () => setTheme(btn.dataset.theme)));
+  document.querySelectorAll('.theme-switch').forEach(btn => {
+    btn.addEventListener('click', () => setTheme(btn.dataset.theme));
+  });
 
   async function loadMe() {
     const meData = await jfetch('/api/me');
     state.profile = meData;
-    const avatar = document.getElementById('avatarPreview');
-    if (avatar) avatar.src = meData.avatar_path || '/static/logo.png';
-    if (previewImage) previewImage.src = meData.avatar_path || '/static/logo.png';
+
+    renderAvatar(document.getElementById('avatarPreview'), meData.avatar_path);
+    renderAvatar(previewImage, meData.avatar_path);
     if (visibilityLabel) visibilityLabel.textContent = meData.avatar_visibility || 'contacts';
     if (avatarVisibilitySelect) avatarVisibilitySelect.value = meData.avatar_visibility || 'contacts';
     if (fontModeSelect) fontModeSelect.value = meData.font_mode || localStorage.getItem('dc-font') || 'system';
@@ -131,12 +168,17 @@
   }
 
   function getAvatarFor(item) {
-    if (item.id === userId) return state.profile.avatar_visibility === 'hidden' ? '/static/logo.png' : (state.profile.avatar_path || '/static/logo.png');
-    return item.avatar_path || item.partner_avatar || '/static/logo.png';
+    if (item.id === userId) {
+      return state.profile.avatar_visibility === 'hidden'
+        ? PLACEHOLDER_AVATAR
+        : (state.profile.avatar_path || PLACEHOLDER_AVATAR);
+    }
+    return item.avatar_path || item.partner_avatar || PLACEHOLDER_AVATAR;
   }
 
   function renderConversationList() {
     if (!conversationList) return;
+
     if (!state.conversations.length) {
       conversationList.innerHTML = '<div class="empty-state"><p>No chats yet. Search someone and open a thread.</p></div>';
       return;
@@ -146,17 +188,22 @@
       const convId = item.conversation_id || item.id;
       const active = convId === state.activeConversationId ? 'active' : '';
       const title = item.partner_name || item.display_name || item.email || 'Chat';
-      const blocked = item.blocked_by_me || item.blocked_me || item.blocked ? `<span class="tiny-meta">${item.blocked_by_me || item.blocked ? 'Blocked' : 'Blocked you'}</span>` : '';
+      const blocked = item.blocked_by_me || item.blocked_me || item.blocked
+        ? `<span class="tiny-meta">${item.blocked_by_me || item.blocked ? 'Blocked' : 'Blocked you'}</span>`
+        : '';
       const action = item.conversation_id ? 'conv' : 'user';
+      const preview = item.last_message_preview || (item.blocked_by_me || item.blocked_me ? 'Blocked conversation' : 'Tap to open');
+      const time = item.last_message_at ? fmt(item.last_message_at) : '';
+
       return `
         <div class="conversation ${active}" data-open-type="${action}" data-conv-id="${convId}" data-user-id="${item.id}" data-blocked="${item.blocked_by_me || item.blocked_me ? '1' : '0'}">
-          <img class="avatar" src="${getAvatarFor(item)}" alt="">
+          <img class="avatar avatar--md" src="${avatarUrl(getAvatarFor(item))}" alt="">
           <div class="conv-main">
             <div class="conv-top">
               <div class="conv-name">${escapeHtml(title)}</div>
-              <div class="conv-time">${escapeHtml(item.last_message_at || '')}</div>
+              <div class="conv-time">${escapeHtml(time)}</div>
             </div>
-            <div class="conv-preview">${escapeHtml(item.last_message_preview || (item.blocked_by_me || item.blocked_me ? 'Blocked conversation' : 'Tap to open'))}</div>
+            <div class="conv-preview">${escapeHtml(preview)}</div>
             ${blocked}
           </div>
         </div>
@@ -170,8 +217,7 @@
           return;
         }
         if (el.dataset.openType === 'user') {
-          const id = Number(el.dataset.userId);
-          await openUserConversation(id);
+          await openUserConversation(Number(el.dataset.userId));
         } else {
           await openConversation(Number(el.dataset.convId));
         }
@@ -194,19 +240,26 @@
     state.activeConversationId = data.id;
     state.activeConversation = data;
     state.messages = data.messages || [];
-    if (peerName) peerName.textContent = data.partner.display_name;
-    if (peerMeta) peerMeta.textContent = data.partner.email + (data.blocked ? ' · Blocked' : '');
-    if (peerAvatar) peerAvatar.src = data.partner.avatar_path || '/static/logo.png';
+
+    if (peerName) peerName.textContent = data.partner.display_name || 'Chat';
+    if (peerMeta) peerMeta.textContent = (data.partner.email || '') + (data.blocked ? ' · Blocked' : '');
+    renderAvatar(peerAvatar, data.partner.avatar_path);
+
     renderMessages();
     renderConversationList();
+
+    localStorage.setItem('dc-active-conv', String(convId));
+    setMobileView('chat');
   }
 
   function renderMessages() {
     if (!messagesEl) return;
+
     if (!state.activeConversation) {
-      messagesEl.innerHTML = `<div class="empty-state"><h2>Choose a chat</h2><p>Your conversations will appear here in a cleaner, phone-friendly layout.</p></div>`;
+      messagesEl.innerHTML = `<div class="empty-state"><h2>Choose a chat</h2><p>Your conversation will appear here.</p></div>`;
       return;
     }
+
     if (!state.messages.length) {
       messagesEl.innerHTML = `<div class="empty-state"><h2>Fresh conversation</h2><p>Say hello and start the thread.</p></div>`;
       return;
@@ -216,13 +269,15 @@
       const out = msg.sender_id === userId ? 'out' : 'in';
       const status = msg.deleted ? 'deleted' : msg.edited_at ? 'edited' : (out === 'out' ? 'sent' : 'received');
       const content = escapeHtml(msg.content || '');
+      const time = escapeHtml(msg.deleted_at_human || msg.edited_at_human || msg.created_at_human || '');
+
       return `
         <div class="message-row ${out}">
           <div class="message ${msg.deleted ? 'deleted' : ''}" data-message-id="${msg.id}">
             <div class="message-text">${content}</div>
             <div class="message-meta">
               <span>${status}</span>
-              <span>${escapeHtml(msg.deleted_at_human || msg.edited_at_human || msg.created_at_human || '')}</span>
+              <span>${time}</span>
             </div>
             ${!msg.deleted && msg.sender_id === userId ? `
               <div class="message-actions">
@@ -265,9 +320,12 @@
   composer?.addEventListener('submit', async (e) => {
     e.preventDefault();
     if (!state.activeConversationId) return;
+
     const content = messageInput.value.trim();
     if (!content) return;
+
     messageInput.value = '';
+
     try {
       await jfetch(`/api/conversations/${state.activeConversationId}/messages`, {
         method: 'POST',
@@ -281,42 +339,62 @@
     }
   });
 
-  contactSearch?.addEventListener('input', debounce(loadConversations, 200));
+  contactSearch?.addEventListener('input', debounce(async () => {
+    await loadConversations();
+  }, 200));
 
   selfChatBtn?.addEventListener('click', () => openUserConversation(userId));
+
   document.getElementById('newChatBtn')?.addEventListener('click', () => openModal(newChatModal));
   document.getElementById('closeNewChatBtn')?.addEventListener('click', () => closeModal(newChatModal));
-  document.getElementById('settingsBtn')?.addEventListener('click', () => openModal(settingsModal));
-  document.getElementById('closeSettingsBtn')?.addEventListener('click', () => closeModal(settingsModal));
   document.getElementById('profilePicBtn')?.addEventListener('click', () => openModal(profilePreviewModal));
   document.getElementById('closePreviewBtn')?.addEventListener('click', () => closeModal(profilePreviewModal));
 
+  function openSettings() {
+    openModal(settingsModal);
+  }
+
+  headerSettingsBtn?.addEventListener('click', openSettings);
+  settingsBtn?.addEventListener('click', openSettings);
+  document.getElementById('closeSettingsBtn')?.addEventListener('click', () => closeModal(settingsModal));
+
+  backToContactsBtn?.addEventListener('click', () => setMobileView('sidebar'));
+
   chatMenuBtn?.addEventListener('click', (e) => {
     e.stopPropagation();
-    chatMenu.classList.toggle('hidden');
+    chatMenu?.classList.toggle('hidden');
   });
+
   document.addEventListener('click', (e) => {
-    if (!chatMenu?.contains(e.target) && e.target !== chatMenuBtn) chatMenu?.classList.add('hidden');
+    if (!chatMenu?.contains(e.target) && e.target !== chatMenuBtn) {
+      chatMenu?.classList.add('hidden');
+    }
   });
 
   profileForm?.addEventListener('submit', async (e) => {
     e.preventDefault();
     const fd = new FormData(profileForm);
     const data = await jfetch('/api/profile', { method: 'POST', body: fd });
+
     closeModal(settingsModal);
-    document.getElementById('avatarPreview').src = data.avatar_path || '/static/logo.png';
-    if (previewImage) previewImage.src = data.avatar_path || '/static/logo.png';
+
+    renderAvatar(document.getElementById('avatarPreview'), data.avatar_path);
+    renderAvatar(previewImage, data.avatar_path);
     if (visibilityLabel) visibilityLabel.textContent = data.avatar_visibility || 'contacts';
     if (avatarVisibilitySelect) avatarVisibilitySelect.value = data.avatar_visibility || 'contacts';
     if (fontModeSelect) fontModeSelect.value = data.font_mode || 'system';
     setFont(data.font_mode || 'system');
+
     await loadMe();
     await loadConversations();
   });
 
   fontModeSelect?.addEventListener('change', () => setFont(fontModeSelect.value));
 
-  document.getElementById('logoutBtn')?.addEventListener('click', () => { window.location.href = '/logout'; });
+  document.getElementById('logoutBtn')?.addEventListener('click', () => {
+    window.location.href = '/logout';
+  });
+
   document.getElementById('deleteAccountBtn')?.addEventListener('click', async () => {
     if (!confirm('Delete your account? This will disable your profile.')) return;
     const data = await jfetch('/api/account', { method: 'DELETE' });
@@ -327,11 +405,13 @@
     if (!state.activeConversationId) return;
     const theme = prompt('Choose background: navy / pure / light', state.activeConversation?.theme || 'navy');
     if (!theme) return;
+
     await jfetch(`/api/conversations/${state.activeConversationId}/theme`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       body: new URLSearchParams({ theme })
     });
+
     setTheme(theme);
     chatMenu?.classList.add('hidden');
     await openConversation(state.activeConversationId);
@@ -339,6 +419,7 @@
 
   document.getElementById('voiceBtn')?.addEventListener('click', () => startCall('voice'));
   document.getElementById('videoBtn')?.addEventListener('click', () => startCall('video'));
+
   document.getElementById('blockBtn')?.addEventListener('click', async () => {
     if (!state.activeConversation?.partner?.id) return;
     await jfetch(`/api/users/${state.activeConversation.partner.id}/block`, { method: 'POST' });
@@ -346,6 +427,7 @@
     await openConversation(state.activeConversationId);
     await loadConversations();
   });
+
   document.getElementById('unblockBtn')?.addEventListener('click', async () => {
     if (!state.activeConversation?.partner?.id) return;
     await jfetch(`/api/users/${state.activeConversation.partner.id}/block`, { method: 'DELETE' });
@@ -357,26 +439,33 @@
   document.getElementById('deleteChatBtn')?.addEventListener('click', async () => {
     if (!state.activeConversationId) return;
     if (!confirm('Delete this chat and all messages?')) return;
+
     await jfetch(`/api/conversations/${state.activeConversationId}`, { method: 'DELETE' });
+
     state.activeConversationId = null;
     state.activeConversation = null;
     state.messages = [];
     await loadConversations();
     renderMessages();
+
     if (peerName) peerName.textContent = 'Select a conversation';
     if (peerMeta) peerMeta.textContent = 'Messages are encrypted at rest';
-    if (peerAvatar) peerAvatar.src = '/static/logo.png';
+    renderAvatar(peerAvatar, null);
+
     chatMenu?.classList.add('hidden');
+    setMobileView('sidebar');
   });
 
   newChatForm?.addEventListener('submit', async (e) => {
     e.preventDefault();
     const form = new FormData(newChatForm);
     const email = form.get('email');
+
     const data = await jfetch('/api/conversations', {
       method: 'POST',
       body: new URLSearchParams({ email })
     });
+
     closeModal(newChatModal);
     newChatForm.reset();
     await loadConversations();
@@ -388,17 +477,26 @@
       alert('Open a chat first.');
       return;
     }
+
     const callPanel = document.getElementById('callPanel');
     const localVideo = document.getElementById('localVideo');
     const callTitle = document.getElementById('callTitle');
+
+    if (!callPanel || !localVideo || !callTitle) {
+      alert('Call panel is not available on this screen.');
+      return;
+    }
+
     const data = await jfetch('/api/call-room', {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       body: new URLSearchParams({ peer_id: state.activeConversation.partner.id, mode })
     });
+
     state.callMode = data.mode;
     callTitle.textContent = `${mode === 'voice' ? 'Voice' : 'Video'} call · ${state.activeConversation.partner.display_name}`;
     callPanel.classList.remove('hidden');
+
     try {
       if (state.localStream) state.localStream.getTracks().forEach(t => t.stop());
       state.localStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: mode === 'video' });
@@ -410,35 +508,44 @@
 
   document.getElementById('closeCallBtn')?.addEventListener('click', () => {
     const callPanel = document.getElementById('callPanel');
-    callPanel.classList.add('hidden');
+    if (callPanel) callPanel.classList.add('hidden');
+
     if (state.localStream) {
       state.localStream.getTracks().forEach(t => t.stop());
       state.localStream = null;
     }
-    document.getElementById('localVideo').srcObject = null;
+
+    const localVideo = document.getElementById('localVideo');
+    if (localVideo) localVideo.srcObject = null;
   });
 
   async function bootstrap() {
     try {
       await loadMe();
       await loadConversations();
+
       const preferred = localStorage.getItem('dc-active-conv');
+      const isMobile = window.matchMedia('(max-width: 900px)').matches;
+
       if (preferred) {
         const found = state.conversations.find(c => String((c.conversation_id || c.id)) === String(preferred));
-        if (found) await openConversation(found.conversation_id || found.id);
-      } else if (state.conversations.length && !state.searchResults) {
+        if (found) {
+          await openConversation(found.conversation_id || found.id);
+          if (!isMobile) setMobileView('chat');
+          return;
+        }
+      }
+
+      if (!isMobile && state.conversations.length && !state.searchResults) {
         await openConversation(state.conversations[0].id);
+        setMobileView('chat');
+      } else {
+        setMobileView('sidebar');
       }
     } catch (e) {
       console.error(e);
     }
   }
-
-  const origOpen = openConversation;
-  openConversation = async function (convId) {
-    localStorage.setItem('dc-active-conv', String(convId));
-    return origOpen(convId);
-  };
 
   bootstrap();
 
@@ -462,10 +569,18 @@
   document.getElementById('newChatModal')?.addEventListener('click', (e) => {
     if (e.target.id === 'newChatModal') closeModal(newChatModal);
   });
+
   document.getElementById('settingsModal')?.addEventListener('click', (e) => {
     if (e.target.id === 'settingsModal') closeModal(settingsModal);
   });
+
   document.getElementById('profilePreviewModal')?.addEventListener('click', (e) => {
     if (e.target.id === 'profilePreviewModal') closeModal(profilePreviewModal);
+  });
+
+  window.addEventListener('resize', () => {
+    if (window.matchMedia('(min-width: 901px)').matches) {
+      document.body.classList.remove('show-chat');
+    }
   });
 })();
