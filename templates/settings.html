@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+{% block content %}
+<header class="settings-top">
+  <a class="back" href="{{ url_for('app_home') }}" aria-label="Back">←</a>
+  <div class="settings-title">
+    <h2>Settings</h2>
+    <p>Personalize the app and manage your invite link.</p>
+  </div>
+  <a class="gear" href="{{ url_for('logout') }}" aria-label="Logout">⎋</a>
+</header>
+
+<section class="settings-panel">
+  <div class="settings-card">
+    <h3>Your profile</h3>
+    <form method="post" enctype="multipart/form-data" class="stack">
+      <input type="hidden" name="action" value="profile">
+      <label>Name</label>
+      <input type="text" name="display_name" value="{{ current_user.display_name }}">
+      <label>Theme</label>
+      <select name="theme">
+        <option value="blue" {% if current_user.theme == 'blue' %}selected{% endif %}>Dark blue</option>
+        <option value="light" {% if current_user.theme == 'light' %}selected{% endif %}>White calm</option>
+        <option value="black" {% if current_user.theme == 'black' %}selected{% endif %}>Deepest black</option>
+      </select>
+      <label>Font size</label>
+      <input type="range" min="85" max="125" step="5" name="font_scale" value="{{ current_user.font_scale }}">
+      <label>Change profile picture</label>
+      <input type="file" name="profile_pic" accept="image/*">
+      <button class="primary" type="submit">Save profile</button>
+    </form>
+  </div>
+
+  <div class="settings-card">
+    <h3>Invite people</h3>
+    <form method="post" class="stack">
+      <input type="hidden" name="action" value="invite">
+      <button class="secondary" type="submit">Create invite link</button>
+    </form>
+    {% if invite_url %}
+    <div class="invite-result" id="inviteResult" data-url="{{ invite_url }}">
+      <div class="invite-label">Invite link</div>
+      <div class="invite-url">{{ invite_url }}</div>
+    </div>
+    {% else %}
+    <div class="invite-result empty" id="inviteResult" hidden></div>
+    {% endif %}
+  </div>
+
+  <div class="settings-card">
+    <h3>About us</h3>
+    <p class="muted-copy">Tomorrow Technology Company builds clean software and apps that help you connect with family and friends.</p>
+  </div>
+
+  <div class="settings-card">
+    <a class="secondary link-btn" href="{{ url_for('logout') }}">Logout</a>
+  </div>
+</section>
+{% endblock %}

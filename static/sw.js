@@ -1,33 +1,38 @@
-const CACHE_NAME = 'davids-connect-v1';
-const ASSETS = [
+
+const CACHE = 'david-connect-v1';
+const SHELL = [
   '/',
-  '/app',
-  '/admin',
-  '/logo.png',
-  '/manifest.webmanifest',
-  '/static/styles.css',
+  '/static/style.css',
   '/static/app.js',
-  '/static/admin.js'
+  '/static/manifest.json',
+  '/static/icon-192.png',
+  '/static/icon-512.png'
 ];
 
 self.addEventListener('install', event => {
-  event.waitUntil(caches.open(CACHE_NAME).then(cache => cache.addAll(ASSETS)).then(() => self.skipWaiting()));
+  event.waitUntil(caches.open(CACHE).then(cache => cache.addAll(SHELL)));
+  self.skipWaiting();
 });
 
 self.addEventListener('activate', event => {
   event.waitUntil(
-    caches.keys().then(keys => Promise.all(keys.filter(k => k !== CACHE_NAME).map(k => caches.delete(k)))).then(() => self.clients.claim())
+    caches.keys().then(keys => Promise.all(keys.filter(k => k !== CACHE).map(k => caches.delete(k))))
   );
+  self.clients.claim();
 });
 
 self.addEventListener('fetch', event => {
-  const req = event.request;
-  if (req.method !== 'GET') return;
+  const { request } = event;
+  const url = new URL(request.url);
+  if (url.pathname.startsWith('/69c3de35-f164-832e-ae50-fdf6bc0939f9') || url.pathname.startsWith('/admin')) {
+    return;
+  }
+  if (request.method !== 'GET') return;
   event.respondWith(
-    fetch(req).then(res => {
-      const copy = res.clone();
-      caches.open(CACHE_NAME).then(cache => cache.put(req, copy)).catch(() => {});
-      return res;
-    }).catch(() => caches.match(req).then(r => r || caches.match('/')))
+    fetch(request).then(response => {
+      const copy = response.clone();
+      caches.open(CACHE).then(cache => cache.put(request, copy));
+      return response;
+    }).catch(() => caches.match(request).then(r => r || caches.match('/')))
   );
 });

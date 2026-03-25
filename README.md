@@ -1,32 +1,23 @@
-# David's Connect
+# David's connect PWA
 
-A mobile-first Flask chat app starter with:
+Routes:
+- `/` users authentication page
+- `/69c3de35-f164-832e-ae50-fdf6bc0939f9` first-time admin setup, then admin login only
+- `/app` user home
+- `/chat/<user_id>` chat screen
+- `/settings` profile and invite settings
+- `/admin/dashboard` admin control panel
 
-- invite/code-based joining
-- unique email enforcement
-- login/register flow
-- admin bootstrap and admin dashboard
-- chat threads, edit/delete, chat deletion, theme per chat
-- avatar upload
-- PWA install prompt and service worker cache
-- password hashing with Werkzeug `scrypt`
-- message encryption at rest with Fernet/AES-based cryptography
+Files:
+- `app.db` user data
+- `admin.db` admin data
+- `Procfile` and `wsgi.py` for Gunicorn deployment
+- `requirements.txt` for install
 
-## Run
+Notes:
+- The admin route is intentionally hidden and does not load the PWA manifest/service worker.
+- Set a strong `SECRET_KEY` in production.
+- The standalone logo is saved outside the app bundle as `logo.png`.
 
-```bash
-pip install -r requirements.txt
-python app.py
-```
-
-Open:
-
-- `/` for sign in / sign up
-- `/app` for the chat UI
-- `/admin` for admin bootstrap / admin dashboard
-
-## Notes
-
-- The app uses standard cryptography instead of a custom encryption scheme.
-- Voice/video call UI is included as a scaffold; full multi-user realtime calling needs a separate signaling layer.
-- Change the admin bootstrap secret in `app.py` before deploying.
+Admin path:
+`69c3de35-f164-832e-ae50-fdf6bc0939f9`

@@ -1,0 +1,74 @@
+{% extends "base.html" %}
+{% block content %}
+<header class="topbar">
+  <a href="{{ url_for('settings') }}" class="avatar-link" aria-label="Open settings">
+    <img class="avatar" src="{{ current_user.profile_pic if current_user and current_user.profile_pic else url_for('static', filename='avatar-default.svg') }}" alt="profile">
+  </a>
+
+  <div class="title-wrap">
+    <div class="app-title">{{ APP_NAME }}</div>
+    <div class="app-subtitle">My contacts</div>
+  </div>
+
+  <a class="gear" href="{{ url_for('settings') }}" aria-label="Settings">⚙</a>
+</header>
+
+<section class="hero-mini">
+  <div class="mini-copy">
+    <div class="mini-label">Recent chats first</div>
+    <div class="mini-text">Pin, archive, rename, or remove people from the three dots.</div>
+  </div>
+  <div class="mini-chip">{{ unread_count }} new</div>
+</section>
+
+<section class="search-row">
+  <form method="get" action="{{ url_for('app_home') }}" class="search-form">
+    <input type="search" name="q" value="{{ q }}" placeholder="Search contacts">
+    <button type="submit">Search</button>
+  </form>
+</section>
+
+<section class="section-heading">
+  <h2>My contacts</h2>
+  <p>People you added or invited by link.</p>
+</section>
+
+<section class="contact-list">
+  {% if contacts %}
+    {% for contact in contacts %}
+      <article class="contact-item {{ 'pinned' if contact.pinned else '' }} {{ 'archived' if contact.archived else '' }}">
+        <a class="contact-main" href="{{ url_for('chat', contact_id=contact.contact_id) }}">
+          <div class="avatar-stack">
+            <img class="avatar" src="{{ contact.contact_pic if contact.contact_pic else url_for('static', filename='avatar-default.svg') }}" alt="">
+            {% if contact.pinned %}<span class="tiny-badge">Pin</span>{% endif %}
+          </div>
+          <div class="contact-copy">
+            <div class="contact-name">
+              {{ contact.alias if contact.alias else contact.contact_name }}
+            </div>
+            <div class="contact-meta">{{ contact.contact_email }}</div>
+          </div>
+        </a>
+
+        <div class="dots-menu">
+          <button type="button" class="dots-btn" aria-label="Open contact menu">⋯</button>
+          <div class="dots-panel">
+            <form method="post" action="{{ url_for('pin_contact', contact_id=contact.contact_id) }}"><button type="submit">{{ 'Unpin' if contact.pinned else 'Pin' }}</button></form>
+            <form method="post" action="{{ url_for('archive_contact', contact_id=contact.contact_id) }}"><button type="submit">{{ 'Unarchive' if contact.archived else 'Archive' }}</button></form>
+            <form method="post" action="{{ url_for('delete_contact', contact_id=contact.contact_id) }}" onsubmit="return confirm('Delete this contact?')"><button type="submit">Delete</button></form>
+          </div>
+        </div>
+      </article>
+    {% endfor %}
+  {% else %}
+    <div class="empty-state">
+      <h3>No contacts yet</h3>
+      <p>Create an invite link in settings, then add someone in.</p>
+    </div>
+  {% endif %}
+</section>
+
+<div class="fab-row">
+  <a class="fab" href="{{ url_for('settings') }}">Invite</a>
+</div>
+{% endblock %}

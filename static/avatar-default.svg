@@ -1,0 +1,7 @@
+
+<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256">
+  <rect width="256" height="256" rx="64" fill="#0b2a4a"/>
+  <circle cx="128" cy="104" r="46" fill="#8cc8ff"/>
+  <path d="M56 214c14-38 46-58 72-58s58 20 72 58" fill="#8cc8ff"/>
+  <text x="128" y="146" font-family="Arial, sans-serif" font-size="54" font-weight="700" text-anchor="middle" fill="#0b2a4a">DC</text>
+</svg>

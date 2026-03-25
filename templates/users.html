@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+{% block head %}
+<meta name="description" content="David's connect authentication page">
+{% endblock %}
+{% block content %}
+<section class="hero-card">
+  <div class="brand-row">
+    <div class="brand-mark">DC</div>
+    <div class="brand-copy">
+      <div class="eyebrow">Private phone-first messenger</div>
+      <h1>David's connect</h1>
+      <p class="subtext">A clean, mobile-first space for family and friends with invite links, saved chats, and a quiet interface that stays out of the way.</p>
+    </div>
+  </div>
+
+  <div class="feature-strip">
+    <span>Encrypted chat</span>
+    <span>PWA ready</span>
+    <span>Invite only</span>
+  </div>
+</section>
+
+<section class="auth-card">
+  <div class="tabs">
+    <button class="tab active" data-tab="register">Register</button>
+    <button class="tab" data-tab="login">Login</button>
+  </div>
+
+  <form class="tab-panel active" id="register" method="post" action="{{ url_for('user_register') }}" enctype="multipart/form-data">
+    <label>Display name</label>
+    <input type="text" name="display_name" placeholder="Your name">
+    <label>Email</label>
+    <input type="email" name="email" placeholder="you@example.com" autocomplete="email" required>
+    <label>Password</label>
+    <input type="password" name="password" placeholder="At least 8 characters" autocomplete="new-password" required>
+    <label>Profile picture</label>
+    <input type="file" name="profile_pic" accept="image/*">
+    <button class="primary" type="submit">Create account</button>
+  </form>
+
+  <form class="tab-panel" id="login" method="post" action="{{ url_for('user_login') }}">
+    <label>Email</label>
+    <input type="email" name="email" placeholder="you@example.com" autocomplete="email" required>
+    <label>Password</label>
+    <input type="password" name="password" placeholder="••••••••" autocomplete="current-password" required>
+    <button class="primary" type="submit">Login</button>
+  </form>
+</section>
+
+<section class="footer-note">
+  <span>Built for phones first</span>
+  <span>Old chats stay saved</span>
+  <span>Dark blue by default</span>
+</section>
+{% endblock %}

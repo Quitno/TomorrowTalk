@@ -1,0 +1,79 @@
+
+{% extends "base.html" %}
+{% block head %}
+<meta name="robots" content="noindex,nofollow">
+{% endblock %}
+{% block content %}
+<header class="admin-top">
+  <div>
+    <h2>Admin dashboard</h2>
+    <p>Secure control panel for {{ APP_NAME }}</p>
+  </div>
+  <a class="gear" href="{{ url_for('admin_logout') }}">Logout</a>
+</header>
+
+<section class="stats-grid">
+  <div class="stat-card"><div class="stat-num">{{ total_users }}</div><div class="stat-label">Users</div></div>
+  <div class="stat-card"><div class="stat-num">{{ total_messages }}</div><div class="stat-label">Messages</div></div>
+  <div class="stat-card"><div class="stat-num">{{ admins|length }}</div><div class="stat-label">Admins</div></div>
+</section>
+
+<section class="admin-actions">
+  <a class="secondary link-btn" href="{{ url_for('report_users') }}">Download users report</a>
+  <a class="secondary link-btn" href="{{ url_for('report_messages') }}">Download messages report</a>
+  <a class="secondary link-btn" href="{{ url_for('report_contacts') }}">Download contacts report</a>
+</section>
+
+<section class="admin-card">
+  <h3>Add another admin</h3>
+  <form method="post" action="{{ url_for('add_admin') }}" class="stack">
+    <label>Email</label>
+    <input type="email" name="email" required>
+    <label>Password</label>
+    <input type="password" name="password" minlength="10" required>
+    <button class="primary" type="submit">Add admin</button>
+  </form>
+</section>
+
+<section class="admin-card">
+  <h3>Current admins</h3>
+  <div class="table-scroll">
+    <table>
+      <thead><tr><th>Email</th><th>Created</th><th>Last login</th></tr></thead>
+      <tbody>
+        {% for admin in admins %}
+          <tr>
+            <td>{{ admin.email }}</td>
+            <td>{{ admin.created_at[:10] }}</td>
+            <td>{{ admin.last_login_at[:16] if admin.last_login_at else '—' }}</td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section class="admin-card">
+  <h3>Users</h3>
+  <div class="table-scroll">
+    <table>
+      <thead><tr><th>Name</th><th>Email</th><th>Theme</th><th>Contacts</th><th>Messages</th><th>Actions</th></tr></thead>
+      <tbody>
+        {% for user in users %}
+          <tr>
+            <td>{{ user.display_name }}</td>
+            <td>{{ user.email }}</td>
+            <td>{{ user.theme }}</td>
+            <td>{{ user.contacts_count }}</td>
+            <td>{{ user.messages_count }}</td>
+            <td class="row-actions">
+              <form method="post" action="{{ url_for('admin_reset_user_theme', user_id=user.id) }}"><button type="submit">Reset theme</button></form>
+              <form method="post" action="{{ url_for('admin_delete_user', user_id=user.id) }}" onsubmit="return confirm('Delete user?')"><button type="submit">Delete</button></form>
+            </td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% endblock %}
